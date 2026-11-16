@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pedido recebido · Lojas Ideal</title>
+<style>
+:root{color-scheme:light;--laranja:#F26A1B;--laranja-forte:#C94F08;--tinta:#211712;--mudo:#6E5D51;--areia:#FFF2E6;--linha:#EADBCD;--verde:#0F7A43}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--areia);color:var(--tinta);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;padding:20px}
+main{background:#fff;border:1px solid var(--linha);border-radius:16px;padding:32px;width:min(520px,100%);display:grid;gap:16px}
+h1{margin:0;font-size:1.8rem;line-height:1.1;text-wrap:balance}
+p{margin:0}
+pre{background:var(--areia);border-radius:10px;padding:14px;white-space:pre-wrap;font:inherit;font-size:.92rem;margin:0}
+.btn{display:block;text-align:center;border-radius:999px;padding:14px 20px;font-weight:700;text-decoration:none;color:#fff;background:var(--verde)}
+.btn.sec{background:var(--tinta)}
+small{color:var(--mudo)}
+</style>
+</head>
+<body>
+<main>
+  <h1 id="titulo">Conferindo seu pagamento…</h1>
+  <p id="texto"></p>
+  <pre id="resumo" hidden></pre>
+  <a class="btn" id="zap" hidden>Abrir o WhatsApp da loja</a>
+  <a class="btn sec" id="voltar" href="/" hidden>Voltar para a sacola</a>
+  <small id="contagem"></small>
+</main>
+<script src="loja.js"></script>
+<script src="obrigado.js"></script>
+</body>
+</html>
