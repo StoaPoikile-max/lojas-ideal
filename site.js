@@ -3,11 +3,11 @@
   var $ = function(id){ return document.getElementById(id); };
   var real = function(v){ return v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}); };
   var zap = function(texto){ return "https://wa.me/" + LOJA.whatsapp + "?text=" + encodeURIComponent(texto); };
-  var esc = function(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); };
+  var esc = function(s){ return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); };
   var semAcento = function(s){ return String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase(); };
   var calmo = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   /* índice de tudo que pode ir para a sacola: produtos simples e peças de conjuntos */
-  var ITENS = {};
+  var ITENS = Object.create(null);
   PRODUTOS.forEach(function(p){
     ITENS[p.id]=p;
     (p.pecas||[]).forEach(function(x){ ITENS[x.id]={id:x.id,nome:x.nome,desc:x.desc,categoria:p.categoria,sub:p.sub,parcelas:x.parcelas,parcela:x.parcela,preco:x.preco,tamanhos:x.tamanhos,foto:p.foto,nota:p.nota,pai:p.id}; });
@@ -110,7 +110,8 @@
   /* sacola */
   var CHAVE = "ideal_sacola", sacola = [];
   try{ sacola = JSON.parse(localStorage.getItem(CHAVE)) || []; }catch(e){ sacola = []; }
-  sacola = sacola.filter(function(i){ var p=produto(i.id); return p && !p.pecas && p.tamanhos.indexOf(i.tam)>=0; });
+  sacola = (Array.isArray(sacola)?sacola:[]).filter(function(i){ var p=i&&typeof i.id==="string"?produto(i.id):null; return p && !p.pecas && p.tamanhos.indexOf(i.tam)>=0; })
+    .slice(0,30).map(function(i){ var n=Math.floor(Number(i.qtd)); return {id:i.id,tam:i.tam,qtd:n>=1?Math.min(20,n):1}; });
   var salvar = function(){ try{ localStorage.setItem(CHAVE, JSON.stringify(sacola)); }catch(e){} };
   var totalSacola = function(){ return sacola.reduce(function(s,i){ return s + produto(i.id).preco*i.qtd; },0); };
   function adicionar(id,tam,semAbrir){
@@ -302,9 +303,9 @@
     try{ localStorage.setItem("ideal_pedido", JSON.stringify(pedido)); }catch(err){}
     try{ if(window.gtag) window.gtag("event","begin_checkout",{currency:"BRL",value:totalSacola()}); if(window.fbq) window.fbq("track","InitiateCheckout",{value:totalSacola(),currency:"BRL"}); }catch(err){}
     var botao=$("pagar"); botao.disabled=true; botao.textContent="Abrindo pagamento…";
-    fetch("/api/criar-pagamento",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pedido)})
+    fetch("/api/criar-pagamento",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({itens:pedido.itens,cliente:pedido.cliente,recebimento:pedido.recebimento,endereco:pedido.endereco})})
       .then(function(r){ return r.json().then(function(d){ if(!r.ok||!d.url) throw new Error(d.erro||""); return d; }); })
-      .then(function(d){ window.location.href=d.url; })
+      .then(function(d){ var u; try{ u=new URL(d.url); }catch(e2){ u=null; } if(!u || u.protocol!=="https:" || !/(^|\.)mercadopago\.com(\.br)?$/.test(u.hostname)) throw new Error(""); window.location.href=d.url; })
       .catch(function(err){
         botao.disabled=false; botao.textContent="Pagar com Pix, cartão ou boleto";
         avisar((err && err.message && !/fetch|JSON|token/i.test(err.message) ? err.message+" " : "O pagamento online ainda não está ativo neste endereço. ")+"Use o botão verde para fechar o pedido pelo WhatsApp.");
