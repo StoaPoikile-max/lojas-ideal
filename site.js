@@ -115,6 +115,10 @@
   var salvar = function(){ try{ localStorage.setItem(CHAVE, JSON.stringify(sacola)); }catch(e){} };
   var totalSacola = function(){ return sacola.reduce(function(s,i){ return s + produto(i.id).preco*i.qtd; },0); };
   function adicionar(id,tam,semAbrir){
+    /* Só entra na sacola um tamanho que existe no catálogo (o valor guardado é o do catálogo). */
+    var pr=produto(id), pos=pr&&!pr.pecas ? pr.tamanhos.indexOf(String(tam)) : -1;
+    if(pos<0) return;
+    tam=pr.tamanhos[pos];
     var ja=sacola.find(function(i){return i.id===id && i.tam===tam;});
     if(ja) ja.qtd=Math.min(20,ja.qtd+1); else sacola.push({id:id,tam:tam,qtd:1});
     salvar(); evento("add_to_cart",produto(id));
@@ -257,12 +261,21 @@
     $("contador").textContent = n;
     var vazia = !sacola.length;
     $("dados").hidden = vazia; $("rodape").hidden = vazia;
-    $("itens").innerHTML = vazia ? '<p class="vazia">Sua sacola está vazia. Escolha uma peça na vitrine.</p>' : sacola.map(function(i,k){
-      var p=produto(i.id);
-      return '<div class="item"><div><strong>'+esc(p.nome)+'</strong><div class="det">'+esc(p.desc)+(i.tam!=="Único"?' · tam. '+esc(i.tam):'')+'</div></div>'+
-        '<strong class="num">'+real(p.preco*i.qtd)+'</strong>'+
-        '<div class="qtds"><button type="button" data-menos="'+k+'" aria-label="Diminuir quantidade">−</button><span class="num">'+i.qtd+'</span><button type="button" data-mais="'+k+'" aria-label="Aumentar quantidade">+</button></div></div>';
-    }).join("");
+    /* Montado com createElement/textContent: nada digitado ou guardado no navegador vira HTML. */
+    var caixa=$("itens"); caixa.textContent="";
+    var no=function(tag,classe,texto){ var e=document.createElement(tag); if(classe) e.className=classe; if(texto!==undefined) e.textContent=texto; return e; };
+    if(vazia){ caixa.appendChild(no("p","vazia","Sua sacola está vazia. Escolha uma peça na vitrine.")); }
+    sacola.forEach(function(i,k){
+      var p=produto(i.id), item=no("div","item"), esq=no("div");
+      esq.appendChild(no("strong","",p.nome));
+      esq.appendChild(no("div","det",p.desc+(i.tam!=="Único"?" · tam. "+i.tam:"")));
+      var qtds=no("div","qtds"), menos=no("button","","−"), mais=no("button","","+");
+      menos.type="button"; menos.setAttribute("data-menos",String(k)); menos.setAttribute("aria-label","Diminuir quantidade");
+      mais.type="button"; mais.setAttribute("data-mais",String(k)); mais.setAttribute("aria-label","Aumentar quantidade");
+      qtds.appendChild(menos); qtds.appendChild(no("span","num",String(i.qtd))); qtds.appendChild(mais);
+      item.appendChild(esq); item.appendChild(no("strong","num",real(p.preco*i.qtd))); item.appendChild(qtds);
+      caixa.appendChild(item);
+    });
     $("total").textContent = real(totalSacola());
     atualizarLinks();
   }

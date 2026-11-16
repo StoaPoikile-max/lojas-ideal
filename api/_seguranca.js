@@ -54,7 +54,7 @@ function assinaturaMercadoPago(req, segredo, dataId) {
 function novoPedido() {
   const letras = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ";
   let s = "";
-  for (const b of crypto.randomBytes(10)) s += letras[b % letras.length];
+  for (let i = 0; i < 10; i++) s += letras[crypto.randomInt(letras.length)];
   return "ID" + s;
 }
 
