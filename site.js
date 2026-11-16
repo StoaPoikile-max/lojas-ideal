@@ -6,8 +6,15 @@
   var esc = function(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); };
   var semAcento = function(s){ return String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase(); };
   var calmo = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var produto = function(id){ return PRODUTOS.find(function(p){ return p.id===id; }); };
-  var parcelado = function(p){ return p.parcelas>1 ? "ou "+p.parcelas+"x de "+real(p.parcela) : "à vista"; };
+  /* índice de tudo que pode ir para a sacola: produtos simples e peças de conjuntos */
+  var ITENS = {};
+  PRODUTOS.forEach(function(p){
+    ITENS[p.id]=p;
+    (p.pecas||[]).forEach(function(x){ ITENS[x.id]={id:x.id,nome:x.nome,desc:x.desc,categoria:p.categoria,sub:p.sub,parcelas:x.parcelas,parcela:x.parcela,preco:x.preco,tamanhos:x.tamanhos,foto:p.foto,nota:p.nota,pai:p.id}; });
+  });
+  var produto = function(id){ return ITENS[id]; };
+  var menorPeca = function(p){ return Math.min.apply(null,p.pecas.map(function(x){return x.preco;})); };
+  var parcelado = function(p){ return p.pecas ? "ou peças a partir de "+real(menorPeca(p)) : (p.parcelas>1 ? "ou "+p.parcelas+"x de "+real(p.parcela) : "à vista"); };
   var temTam = function(p){ return !(p.tamanhos.length===1 && p.tamanhos[0]==="Único"); };
 
   /* medição de visitas e vendas: só liga se LOJA.ga4 ou LOJA.pixel estiverem preenchidos em loja.js */
@@ -103,13 +110,14 @@
   /* sacola */
   var CHAVE = "ideal_sacola", sacola = [];
   try{ sacola = JSON.parse(localStorage.getItem(CHAVE)) || []; }catch(e){ sacola = []; }
-  sacola = sacola.filter(function(i){ var p=produto(i.id); return p && p.tamanhos.indexOf(i.tam)>=0; });
+  sacola = sacola.filter(function(i){ var p=produto(i.id); return p && !p.pecas && p.tamanhos.indexOf(i.tam)>=0; });
   var salvar = function(){ try{ localStorage.setItem(CHAVE, JSON.stringify(sacola)); }catch(e){} };
   var totalSacola = function(){ return sacola.reduce(function(s,i){ return s + produto(i.id).preco*i.qtd; },0); };
-  function adicionar(id,tam){
+  function adicionar(id,tam,semAbrir){
     var ja=sacola.find(function(i){return i.id===id && i.tam===tam;});
     if(ja) ja.qtd=Math.min(20,ja.qtd+1); else sacola.push({id:id,tam:tam,qtd:1});
-    salvar(); desenharSacola(); $("sacola").showModal(); evento("add_to_cart",produto(id));
+    salvar(); evento("add_to_cart",produto(id));
+    if(!semAbrir){ desenharSacola(); $("sacola").showModal(); }
   }
 
   /* vitrine */
@@ -118,6 +126,11 @@
     .sort(function(a,b){ return (ORDEM.indexOf(a)+1||99)-(ORDEM.indexOf(b)+1||99); });
   var filtro = "Todos", sub = "Todos", termo = "";
   function cartao(p){
+    if(p.pecas) return '<article class="produto">'+
+      '<button type="button" class="foto" data-ver="'+p.id+'" aria-label="Ver '+esc(p.nome)+' de perto"><img src="'+esc(p.foto)+'" alt="'+esc(p.nome+", "+p.desc)+'" loading="lazy"></button>'+
+      '<div class="info"><div><h3>'+esc(p.nome)+'</h3><span class="pub">'+esc(p.desc)+'</span></div>'+
+      '<div class="preco num">'+real(p.preco)+'<small>conjunto · '+esc(parcelado(p))+'</small></div>'+
+      '<div class="linha-compra"><button type="button" data-ver="'+p.id+'">Escolher conjunto ou peça</button></div></div></article>';
     var sel = temTam(p) ? '<select id="tam-'+p.id+'" aria-label="Tamanho de '+esc(p.nome)+'">'+p.tamanhos.map(function(t){return '<option value="'+esc(t)+'">'+esc(t)+'</option>';}).join("")+'</select>' : '';
     return '<article class="produto">'+
       '<button type="button" class="foto" data-ver="'+p.id+'" aria-label="Ver '+esc(p.nome)+' de perto"><img src="'+esc(p.foto)+'" alt="'+esc(p.nome+", "+p.desc)+'" loading="lazy"></button>'+
@@ -138,7 +151,7 @@
   function desenharVitrine(){
     var v=$("vitrine"), t=semAcento(termo.trim());
     if(t){
-      var achados=PRODUTOS.filter(function(p){ return semAcento(p.nome+" "+p.desc+" "+p.categoria+" "+p.sub).indexOf(t)>=0; });
+      var achados=PRODUTOS.filter(function(p){ return semAcento(p.nome+" "+p.desc+" "+p.categoria+" "+p.sub+" "+(p.pecas||[]).map(function(x){return x.nome+" "+x.desc;}).join(" ")).indexOf(t)>=0; });
       v.innerHTML = achados.length ? '<div class="grade">'+ordenar(achados).map(cartao).join("")+'</div>' : '<p class="vazio">Não achei nada com esse nome. Tente outra palavra ou pergunte no WhatsApp.</p>';
       return;
     }
@@ -179,25 +192,51 @@
   /* detalhe */
   var detId=null;
   function abrirDetalhe(id){
-    var p=produto(id); if(!p) return; detId=id;
+    var p=produto(id); if(!p) return; if(p.pai) p=produto(p.pai); detId=p.id;
     $("det-img").src=p.foto; $("det-img").alt=p.nome+", "+p.desc;
     $("det-cat").textContent=p.categoria+" · "+p.sub; $("det-nome").textContent=p.nome; $("det-desc").textContent=p.desc;
     $("det-preco").innerHTML=real(p.preco)+"<small>"+esc(parcelado(p))+"</small>";
-    $("det-tams-box").hidden=!temTam(p);
+    $("det-pecas-box").hidden=!p.pecas;
+    if(p.pecas){
+      $("det-pecas").innerHTML='<label><input type="radio" name="det-op" value="todas" checked>Conjunto completo</label>'+p.pecas.map(function(x){ return '<label><input type="radio" name="det-op" value="'+esc(x.id)+'">Só '+esc(x.curto||x.nome)+'</label>'; }).join("");
+      $("det-pecas-tams").innerHTML=p.pecas.map(function(x){ return '<label class="campo" data-peca="'+esc(x.id)+'">Tamanho d'+esc(x.curto||(" "+x.nome))+'<select id="det-tam-'+esc(x.id)+'">'+x.tamanhos.map(function(t){return '<option value="'+esc(t)+'">'+esc(t)+'</option>';}).join("")+'</select></label>'; }).join("");
+      atualizarPecas();
+    }
+    $("det-tams-box").hidden=!!p.pecas || !temTam(p);
     $("det-tams").innerHTML=p.tamanhos.map(function(t,i){ return '<label><input type="radio" name="det-tam" value="'+esc(t)+'"'+(i===0?" checked":"")+'>'+esc(t)+'</label>'; }).join("");
-    $("det-nota").textContent=(p.nota?p.nota+". ":"")+(temTam(p)?"Confirmamos a numeração disponível no WhatsApp.":"");
+    $("det-nota").textContent=(p.nota?p.nota+". ":"")+((p.pecas||temTam(p))?"Confirmamos a numeração disponível no WhatsApp.":"");
     $("det-zap").href=zap("Olá, Lojas Ideal! Vi no site: "+p.nome+" ("+p.desc+"), "+real(p.preco)+". Ainda tem?");
     var link=location.href.split("#")[0]+"#p-"+p.id;
     $("det-enviar").href="https://wa.me/?text="+encodeURIComponent("Olha o que eu vi na Lojas Ideal: "+p.nome+" ("+p.desc+"), "+(p.parcelas>1?p.parcelas+"x de "+real(p.parcela):real(p.preco))+"\n"+link);
     $("det-copiar").textContent="Copiar link"; $("det-copiar").onclick=function(){ var b=this; try{ navigator.clipboard.writeText(link).then(function(){ b.textContent="Link copiado"; },function(){ b.textContent="Não deu para copiar"; }); }catch(e){ b.textContent="Não deu para copiar"; } };
+    if(!p.pecas) $("det-add").textContent="Adicionar à sacola";
     $("detalhe").showModal(); evento("view_item",p);
   }
+  function pecasEscolhidas(){
+    var p=produto(detId), m=document.querySelector('input[name="det-op"]:checked'), v=m?m.value:"todas";
+    return p.pecas.filter(function(x){ return v==="todas" || x.id===v; });
+  }
+  function atualizarPecas(){
+    var p=produto(detId); if(!p || !p.pecas) return;
+    var esc_=pecasEscolhidas(), total=esc_.reduce(function(s,x){return s+x.preco;},0);
+    var linha = esc_.length===1 ? (esc_[0].parcelas>1 ? "ou "+esc_[0].parcelas+"x de "+real(esc_[0].parcela) : "à vista")
+      : esc_.map(function(x){ return x.nome+" "+real(x.preco); }).join(" + ");
+    $("det-preco").innerHTML=real(total)+"<small>"+esc(linha)+"</small>";
+    [].forEach.call($("det-pecas-tams").children,function(el){ el.hidden=!esc_.some(function(x){return x.id===el.getAttribute("data-peca");}); });
+    $("det-add").textContent = esc_.length>1 ? "Adicionar o conjunto à sacola" : "Adicionar "+(esc_[0].curto||esc_[0].nome)+" à sacola";
+  }
+  $("det-pecas").addEventListener("change",atualizarPecas);
   function abrirPeloLink(){ var h=decodeURIComponent(location.hash||""); if(h.indexOf("#p-")===0 && produto(h.slice(3))) abrirDetalhe(h.slice(3)); }
   window.addEventListener("hashchange",abrirPeloLink);
   inclinar($("det-foto"), $("det-foto").firstChild);
   $("det-fechar").addEventListener("click",function(){ $("detalhe").close(); });
   $("detalhe").addEventListener("click",function(e){ if(e.target===$("detalhe")) $("detalhe").close(); });
   $("det-add").addEventListener("click",function(){
+    var p=produto(detId);
+    if(p.pecas){
+      pecasEscolhidas().forEach(function(x){ adicionar(x.id, $("det-tam-"+x.id).value, true); });
+      $("detalhe").close(); desenharSacola(); $("sacola").showModal(); return;
+    }
     var m=document.querySelector('input[name="det-tam"]:checked'); $("detalhe").close(); adicionar(detId, m?m.value:"Único");
   });
 

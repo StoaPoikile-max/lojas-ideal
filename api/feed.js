@@ -9,7 +9,8 @@ module.exports = function (req, res) {
   const base = process.env.SITE_URL || "https://" + req.headers.host;
   const csv = (v) => '"' + String(v).replace(/"/g, '""') + '"';
   const linhas = [["id", "title", "description", "availability", "condition", "price", "link", "image_link", "brand", "product_type"].join(",")];
-  for (const p of PRODUTOS) {
+  const itens = PRODUTOS.flatMap((g) => (g.pecas ? g.pecas.map((x) => Object.assign({}, x, { foto: g.foto, categoria: g.categoria, sub: g.sub })) : [g]));
+  for (const p of itens) {
     const texto = p.nome + " " + p.desc;
     const marca = MARCAS.find((m) => texto.toLowerCase().includes(m.toLowerCase())) || "Lojas Ideal";
     linhas.push([

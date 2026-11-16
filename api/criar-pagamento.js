@@ -3,6 +3,8 @@
    MP_ACCESS_TOKEN e nunca aparece no site. */
 
 const { LOJA, PRODUTOS } = require("../loja.js");
+// Peças de conjuntos são vendidas como itens próprios; o conjunto em si não vai para a sacola.
+const ITENS = PRODUTOS.flatMap((p) => (p.pecas ? p.pecas : [p]));
 
 module.exports = async function (req, res) {
   if (req.method !== "POST") {
@@ -30,7 +32,7 @@ module.exports = async function (req, res) {
   // O preço vem SEMPRE do catálogo do servidor, nunca do navegador do cliente.
   const linhas = [];
   for (const it of itens) {
-    const p = PRODUTOS.find((x) => x.id === it.id);
+    const p = ITENS.find((x) => x.id === it.id);
     const qtd = Math.floor(Number(it.qtd));
     if (!p || !(qtd >= 1 && qtd <= 20) || !p.tamanhos.includes(String(it.tam))) {
       return res.status(400).json({ erro: "Algum item da sacola não está mais disponível. Atualize a página." });
